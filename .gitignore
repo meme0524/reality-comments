@@ -1,0 +1,6 @@
+state.json
+gifts.json
+coins.txt
+users.txt
+export/
+*.tmp

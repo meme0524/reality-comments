@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body { margin: 0; background: transparent; color: #fff; font-family: "Segoe UI", "Yu Gothic UI", sans-serif; }
+    body { text-shadow: 0 2px 8px rgba(0,0,0,.65); }
+    .total { display: flex; align-items: baseline; gap: 8px; }
+    #coins { font-size: 64px; font-weight: 700; line-height: 1; }
+    #unit { font-size: 28px; }
+    ul { list-style: none; margin: 12px 0 0; padding: 0; }
+    li { display: flex; justify-content: space-between; gap: 16px; font-size: 22px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <div class="total"><div id="coins">0</div><div id="unit">コイン</div></div>
+  <ul id="users"></ul>
+  <script>
+    const UID = 'com.reality.onecomme.comments';
+    function esc(value) {
+      return String(value || '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[ch]));
+    }
+    async function tick() {
+      try {
+        const response = await fetch('/api/plugins/' + UID + '?action=state');
+        const json = await response.json();
+        const data = typeof json.response === 'string' ? JSON.parse(json.response) : json.response;
+        const status = data && data.status ? data.status : {};
+        document.getElementById('coins').textContent = Number(status.coins || 0).toLocaleString('ja-JP');
+        const users = Array.isArray(status.users) ? status.users : [];
+        document.getElementById('users').innerHTML = users.map((user) =>
+          '<li><span>' + esc(user.name || user.userId) + '</span><span>' +
+          Number(user.coins || 0).toLocaleString('ja-JP') + '</span></li>'
+        ).join('');
+      } catch (error) {}
+    }
+    tick();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>

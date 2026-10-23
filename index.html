@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>REALITYコメント</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; font-family: "Segoe UI", "Yu Gothic UI", sans-serif; line-height: 1.5; }
+    main { max-width: 640px; margin: 0 auto; padding: 24px 20px 48px; }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { margin: 0 0 16px; }
+    label { display: block; font-weight: 600; margin: 16px 0 6px; }
+    input[type="url"], select { width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit; }
+    .help { color: #666; font-size: 13px; font-weight: 400; margin-top: 4px; }
+    .checks { display: grid; gap: 8px; margin-top: 8px; }
+    .checks label { font-weight: 400; margin: 0; }
+    .row { display: flex; gap: 8px; margin-top: 20px; }
+    button { font: inherit; padding: 8px 14px; cursor: pointer; }
+    .status { margin-top: 24px; padding: 12px 14px; border: 1px solid #ccc; border-radius: 8px; }
+    .status b { font-weight: 600; }
+    .coins { font-size: 28px; font-weight: 700; margin-top: 8px; }
+    table.users { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    table.users th, table.users td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #ddd; }
+    table.users .num { text-align: right; }
+    .exports { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .error { color: #b00020; }
+    .ok { color: #0b7a32; }
+    footer { margin-top: 28px; color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>REALITYコメント</h1>
+    <p>REALITYの公式コメント画面と同じ接続でコメントを受け取り、わんコメの枠へ流します。</p>
+    <form id="form">
+      <label for="commentUrl">コメントURL</label>
+      <input id="commentUrl" name="commentUrl" type="url" placeholder="https://reality.app/comments/配信ID.ハッシュ" required>
+      <div class="help">REALITYドックの「コメント」で開くページのURLを貼り付けます。</div>
+
+      <label for="serviceId">取り込み先の枠</label>
+      <select id="serviceId" name="serviceId" required></select>
+      <div class="help" id="serviceHelp">読み上げは、選んだ枠の読み上げ設定に従います。枠を有効にしてください。</div>
+
+      <label>取り込むもの</label>
+      <div class="checks">
+        <label><input type="checkbox" name="includeGift" checked> ギフト</label>
+        <label><input type="checkbox" name="includeLike"> いいね</label>
+        <label><input type="checkbox" name="includeEnter"> 入室</label>
+        <label><input type="checkbox" name="includeFollow"> フォロー</label>
+        <label><input type="checkbox" name="includeShare"> シェア</label>
+        <label><input type="checkbox" name="includeSystem" checked> システムメッセージ</label>
+        <label><input type="checkbox" name="includeHistory"> 接続時に、すでに表示されているコメントも取り込む</label>
+      </div>
+      <div class="help">通常コメントと配信者コメントは常に取り込みます。</div>
+      <div class="row">
+        <button type="submit">保存して接続</button>
+        <button type="button" id="reconnect">再接続</button>
+        <button type="button" id="resetCoins">この配信の集計を消す</button>
+      </div>
+    </form>
+    <p id="message"></p>
+    <section class="status" id="status"></section>
+    <div class="exports" id="exports"></div>
+    <footer>このプラグインはわんコメのHTTP APIを使います。無料版ではクレジット表記が必要です。</footer>
+  </main>
+  <script>
+    const UID = 'com.reality.onecomme.comments';
+    const LABELS = {"on":"接続中","off":"未接続","media":"配信ID","received":"受信","posted":"わんコメへ送信","pick":"枠を選択","noService":"枠がありません。わんコメで枠を追加してから、このページを開き直してください。","saved":"保存しました","failed":"保存に失敗しました","coin":"コイン","gifts":"ギフト","state":"状態","file":"OBSのテキストで読む場合はこのファイルを使います。","overlay":"配信画面に出す場合は、OBSのブラウザソースにこのURLを入れます。コメント用テンプレートとは別に追加してください。","overlayUrl":"http://localhost:11180/plugins/com.reality.onecomme.comments/total.html","resetDone":"この配信の集計を消しました","user":"ユーザー","count":"回数","people":"人数","empty":"まだありません","keep":"日付は日本時間です。配信を変えても過去の記録は残ります。","usersFile":"ユーザー別の一覧はこのファイルです。","exportDir":"CSVはギフトが入るたびに、下のフォルダへ自動で上書きされます。ボタンは手元にダウンロードしたいとき用です。","exportUsers":"ユーザー別（全期間）","exportStreams":"配信ごと","exportDays":"日ごと","exportGifts":"明細","exported":"ダウンロードしました"};
+
+    const form = document.getElementById('form');
+    const message = document.getElementById('message');
+
+    async function readPlugin(method, action, body) {
+      const response = await fetch('/api/plugins/' + UID + '?action=' + action, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const json = await response.json();
+      const data = typeof json.response === 'string' ? JSON.parse(json.response) : json.response;
+      if (Number(json.code) >= 400) {
+        throw new Error((data && data.error) || LABELS.failed);
+      }
+      return data;
+    }
+
+    function formValue() {
+      const data = new FormData(form);
+      return {
+        commentUrl: String(data.get('commentUrl') || ''),
+        serviceId: String(data.get('serviceId') || ''),
+        includeGift: data.get('includeGift') === 'on',
+        includeLike: data.get('includeLike') === 'on',
+        includeEnter: data.get('includeEnter') === 'on',
+        includeFollow: data.get('includeFollow') === 'on',
+        includeShare: data.get('includeShare') === 'on',
+        includeSystem: data.get('includeSystem') === 'on',
+        includeHistory: data.get('includeHistory') === 'on',
+      };
+    }
+
+    function fill(settings) {
+      form.commentUrl.value = settings.commentUrl || '';
+      if (settings.serviceId) form.serviceId.value = settings.serviceId;
+      for (const name of ['includeGift', 'includeLike', 'includeEnter', 'includeFollow', 'includeShare', 'includeSystem', 'includeHistory']) {
+        form.elements[name].checked = !!settings[name];
+      }
+    }
+
+    function formatCoins(value) {
+      return Number(value || 0).toLocaleString('ja-JP');
+    }
+
+    function esc(value) {
+      return String(value || '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[ch]));
+    }
+
+    function renderStatus(status) {
+      const error = status && status.lastError
+        ? '<div class="error">' + esc(status.lastError) + '</div>'
+        : '';
+      const state = status && status.connected
+        ? '<span class="ok">' + LABELS.on + '</span>'
+        : LABELS.off;
+      const coins = formatCoins(status && status.coins);
+      const gifts = (status && status.giftCount) || 0;
+      const users = status && Array.isArray(status.users) ? status.users : [];
+      const rows = users.map((user) =>
+        '<tr><td>' + esc(user.name || user.userId) + '</td><td class="num">' +
+        formatCoins(user.coins) + '</td><td class="num">' + (user.count || 0) + '</td></tr>'
+      ).join('');
+      const table = '<table class="users"><thead><tr><th>' + LABELS.user +
+        '</th><th class="num">' + LABELS.coin + '</th><th class="num">' + LABELS.count +
+        '</th></tr></thead><tbody>' + (rows || '<tr><td colspan="3">' + LABELS.empty + '</td></tr>') +
+        '</tbody></table>';
+      document.getElementById('status').innerHTML =
+        '<div class="coins">' + coins + ' ' + LABELS.coin + '</div>' +
+        '<div>' + LABELS.gifts + ': ' + gifts + ' / ' + LABELS.people + ': ' + users.length + '</div>' +
+        table +
+        '<div><b>' + LABELS.state + '</b> ' + state + '</div>' +
+        '<div>' + LABELS.media + ': ' + esc((status && status.mediaId) || '-') + '</div>' +
+        '<div>' + LABELS.received + ': ' + ((status && status.received) || 0) +
+        ' / ' + LABELS.posted + ': ' + ((status && status.posted) || 0) + '</div>' +
+        '<div class="help">' + LABELS.keep + '</div>' +
+        (status && status.usersFile ? '<div class="help">' + LABELS.usersFile + '<br>' + esc(status.usersFile) + '</div>' : '') +
+        (status && status.exportDir ? '<div class="help">' + LABELS.exportDir + '<br>' + esc(status.exportDir) + '</div>' : '') +
+        '<div class="help">' + LABELS.overlay + '<br>' + LABELS.overlayUrl + '</div>' +
+        error;
+    }
+
+    function renderExports() {
+      const box = document.getElementById('exports');
+      if (!box || box.childElementCount) return;
+      const kinds = [
+        ['users', LABELS.exportUsers],
+        ['streams', LABELS.exportStreams],
+        ['days', LABELS.exportDays],
+        ['gifts', LABELS.exportGifts],
+      ];
+      for (const [kind, label] of kinds) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.addEventListener('click', () => downloadExport(kind));
+        box.appendChild(button);
+      }
+    }
+
+    async function downloadExport(kind) {
+      message.textContent = '';
+      try {
+        const data = await readPlugin('GET', 'export&kind=' + encodeURIComponent(kind));
+        const blob = new Blob([data.csv], { type: 'text/csv;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = data.filename;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        message.textContent = LABELS.exported;
+      } catch (error) {
+        message.textContent = error.message || LABELS.failed;
+      }
+    }
+
+    async function loadServices(selected) {
+      const select = form.serviceId;
+      select.innerHTML = '';
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = LABELS.pick;
+      select.appendChild(empty);
+      try {
+        const response = await fetch('/api/services');
+        const services = await response.json();
+        const list = Array.isArray(services) ? services : [];
+        for (const service of list) {
+          const option = document.createElement('option');
+          option.value = service.id;
+          option.textContent = service.name || service.id;
+          select.appendChild(option);
+        }
+        if (!list.length) document.getElementById('serviceHelp').textContent = LABELS.noService;
+        if (list.length === 1 && !selected) select.value = list[0].id;
+      } catch (error) {
+        document.getElementById('serviceHelp').textContent = LABELS.noService;
+      }
+      if (selected) select.value = selected;
+    }
+
+    async function refresh() {
+      const data = await readPlugin('GET', 'state');
+      renderStatus(data.status);
+      return data;
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      message.textContent = '';
+      try {
+        const data = await readPlugin('POST', 'save', formValue());
+        fill(data.settings);
+        renderStatus(data.status);
+        message.textContent = LABELS.saved;
+      } catch (error) {
+        message.textContent = error.message || LABELS.failed;
+      }
+    });
+
+    document.getElementById('resetCoins').addEventListener('click', async () => {
+      message.textContent = '';
+      try {
+        const data = await readPlugin('POST', 'reset-coins');
+        renderStatus(data.status);
+        message.textContent = LABELS.resetDone;
+      } catch (error) {
+        message.textContent = error.message || LABELS.failed;
+      }
+    });
+
+    document.getElementById('reconnect').addEventListener('click', async () => {
+      message.textContent = '';
+      try {
+        const data = await readPlugin('POST', 'reconnect');
+        renderStatus(data.status);
+      } catch (error) {
+        message.textContent = error.message || LABELS.failed;
+      }
+    });
+
+    refresh().then(async (data) => {
+      await loadServices(data.settings && data.settings.serviceId);
+      fill(data.settings || {});
+    }).catch((error) => {
+      message.textContent = error.message || LABELS.failed;
+    });
+    renderExports();
+    setInterval(() => { refresh().catch(() => {}); }, 2000);
+  </script>
+</body>
+</html>
