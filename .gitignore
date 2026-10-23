@@ -3,4 +3,5 @@ gifts.json
 coins.txt
 users.txt
 export/
+badges/
 *.tmp

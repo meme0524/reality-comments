@@ -135,7 +135,7 @@ function highlightColors(kind) {
 }
 
 function supporterBadgeUrl(rank) {
-  if (rank >= 1 && rank <= 7) return `${BADGE_BASE}/supporter-${rank}.png`;
+  if (rank >= 1 && rank <= 9) return `${BADGE_BASE}/supporter-${rank}.png`;
   return `https://reality.app/img/comment/supporter_rank${rank}.png`;
 }
 

@@ -25,7 +25,7 @@
 
 ## 設定
 
-1. コメントURLに、`https://reality.app/comments/配信ID.ハッシュ` を貼る
+1. コメントURLに、`https://reality.app/comments/配信ID.ハッシュ` を貼る（REALITY OBS Pluginのコメント表示機能を使う。）
 2. 取り込み先の枠を選ぶ
 3. 「保存して接続」を押す
 
@@ -84,7 +84,11 @@ http://localhost:11180/plugins/com.reality.onecomme.comments/total.html
 
 ## サポーターマーク
 
-ランク1から7は、公式画像の左半分を正方形に切り出したものを使います。わんコメの丸いバッジ枠で、横長の画像がつぶれないようにするためです。ランク8以降は公式の画像URLをそのまま使います。
+ランク1から9の画像は同梱していません。次のファイルを自分で用意し、`badges/` に置いてください。
+
+| ファイル | サイズ |
+| --- | --- |
+| `supporter-1.png` 〜 `supporter-9.png` | 64×64 ピクセルの PNG |
 
 ## ファイル構成
 
@@ -96,4 +100,4 @@ http://localhost:11180/plugins/com.reality.onecomme.comments/total.html
 | `stats.js` | 集計とCSV |
 | `index.html` | 設定ページ |
 | `total.html` | 配信画面用の合計表示 |
-| `badges/` | サポーターランク1〜7の画像 |
+| `badges/` | 自分で置くサポーターランク1〜9の画像（各 64×64） |
