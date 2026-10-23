@@ -108,7 +108,7 @@ function postJson(path, payload) {
 const plugin = {
   name: 'REALITY\u30b3\u30e1\u30f3\u30c8',
   uid: UID,
-  version: '1.3.3',
+  version: '1.0.0',
   author: 'local',
   url: `http://localhost:${ONECOMME_PORT}/plugins/${UID}/index.html`,
   permissions: [],
